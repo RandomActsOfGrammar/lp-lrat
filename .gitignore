@@ -1,0 +1,11 @@
+
+#Emacs save files
+*~
+
+#Generated Lambda Prolog files
+*.lp
+*.lpo
+
+#Anything in the build directory
+build/*
+

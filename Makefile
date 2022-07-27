@@ -32,8 +32,9 @@ build/proof.lp: build/proof.lpo build/redundant.lpo build/sat.lpo
 
 part-clean:
 	find . -name "*~" -delete
+	find build/ -name "*.sig" -delete
+	find build/ -name "*.mod" -delete
 
-clean:
-	find . -name "*~" -delete
+clean: part-clean
 	find . -name "*.lpo" -delete
 	find . -name "*.lp" -delete

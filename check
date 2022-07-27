@@ -11,11 +11,11 @@ print_help(){
     echo "options:"
     echo "-h, --help         show brief help"
     echo "--output <base>    output Lambda Prolog code to module base"
-    echo "--force            force overwriting existing files"
+    echo "--no-force         don't force overwriting existing files"
 }
 
 
-force=false
+force=true
 output_file="output"
 
 
@@ -27,7 +27,7 @@ while test $# -gt 0; do
           exit 0
           ;;
       --force)
-          force=true
+          force=false
           shift
           ;;
       --output)
@@ -58,6 +58,10 @@ fi
 
 dimacs_file=$1
 lrat_file=$2
+
+
+#make sure the .lpo files are good
+make
 
 
 #compile the file into Lambda Prolog
