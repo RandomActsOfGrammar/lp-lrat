@@ -67,9 +67,9 @@ make
 #compile the file into Lambda Prolog
 echo "Compiling to Lambda Prolog"
 if $force; then
-    src/encode.py --force $dimacs_file $lrat_file build/$output_file
+    python3 src/encode.py --force $dimacs_file $lrat_file build/$output_file
 else
-    src/encode.py $dimacs_file $lrat_file build/$output_file
+    python3 src/encode.py $dimacs_file $lrat_file build/$output_file
 fi
 res=$?
 if ! [ $res -eq 0 ]; then
