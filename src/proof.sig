@@ -19,7 +19,7 @@ type add_line   proof_line -> proof -> proof.
 /*
  * Check whether a full proof is valid
  */
-exportdef check_proof   proof -> o.
+type check_proof   proof -> o.
 
 
 /*

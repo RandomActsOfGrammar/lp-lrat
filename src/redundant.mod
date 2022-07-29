@@ -12,7 +12,7 @@ rup (or L CRest) CIDList :-
 
 
 /*Last clause must be falsified*/
-rup_help [CID] :- clause_id CID C, unsat_clause C.
+rup_help (CID::nil) :- clause_id CID C, unsat_clause C.
 /*Earlier clauses must become unit and propagate to the rest*/
 rup_help (CID::Rest) :-
    clause_id CID C, unit_clause C L, is_true L => rup_help Rest.

@@ -9,3 +9,7 @@
 #Anything in the build directory
 build/*
 
+#Any Lambda Prolog files in the proof directory
+proof/*.mod
+proof/*.sig
+

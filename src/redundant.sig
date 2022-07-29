@@ -15,21 +15,21 @@ type clause_id   clause_id -> clause -> o.
  * Check the clause follows from the given clauses (in order) by
  * reverse unit propagation.
  */
-exportdef rup   clause -> list clause_id -> o.
+type rup   clause -> list clause_id -> o.
 
 
 /*
  * Actually do the reverse unit propagation from a set of assumptions
  * and clauses
  */
-exportdef rup_help   list clause_id -> o.
+type rup_help   list clause_id -> o.
 
 
 /*
  * Determine if a clause is unit under he assumptions, and give that
  * unit literal back
  */
-exportdef unit_clause   clause -> lit -> o.
+type unit_clause   clause -> lit -> o.
 
 
 /*
@@ -37,5 +37,5 @@ exportdef unit_clause   clause -> lit -> o.
  * I don't think we can reason about this, but we can assume things
  * about it for the proving part.
  */
-exportdef not_assigned   lit -> o.
+type not_assigned   lit -> o.
 

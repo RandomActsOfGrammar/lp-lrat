@@ -36,18 +36,18 @@ type is_true   lit -> o.
 /*
  * Checking satisfiability for both formulas and clauses
  */
-exportdef sat          formula -> o.
-exportdef sat_clause   clause -> o.
+type sat          formula -> o.
+type sat_clause   clause -> o.
 
 
 /*
  * Clause is falsified by the assumptions
  */
-exportdef unsat_clause   clause -> o.
+type unsat_clause   clause -> o.
 
 
 /*
  * Negate a literal
  */
-exportdef negate   lit -> lit -> o.
+type negate   lit -> lit -> o.
 

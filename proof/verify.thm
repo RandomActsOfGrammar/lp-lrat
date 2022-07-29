@@ -1,0 +1,173 @@
+Specification "proof".
+
+
+/*
+ * Define type relations
+ */
+Define is_lit : lit -> prop by
+  is_lit (var V);
+  is_lit (neg V).
+
+Define is_clause : clause -> prop by
+  is_clause c*;
+  is_clause (or L Rest) := is_lit L /\ is_clause Rest.
+
+Define is_formula : formula -> prop by
+  is_formula f*;
+  is_formula (and C Rest) := is_clause C /\ is_formula Rest.
+
+
+
+
+/*
+ * A good context contains is_true and clause_id
+ * A good context contains at most is_true of A or -A, not both
+ * A good context contains at most ONE binding for a clause ID
+ */
+Define good_context : olist -> prop by
+  good_context nil;
+  good_context (is_true (var V)::Rest) :=
+     (member (is_true (neg V)) Rest -> false) /\
+     good_context Rest;
+  good_context (is_true (neg V)::Rest) :=
+     (member (is_true (var V)) Rest -> false) /\
+     good_context Rest;
+  good_context (clause_id CID Clause::Rest) :=
+     (exists Other, member (clause_id CID Other) Rest -> false) /\
+     good_context Rest.
+
+
+Theorem good_context_member : forall Ctx F,
+  good_context Ctx -> member F Ctx ->
+  (exists L, is_lit L /\ F = is_true L) \/
+  (exists CID C, F = clause_id CID C).
+induction on 2. intros GC Mem. case Mem.
+  %1:  Member here
+   case GC.
+    %1.1:  F = is_true (neg V)
+     search.
+    %1.2:  F = is_true (var V)
+     search.
+    %1.3:  F = clause_id CID Clause
+     search.
+  %2:  Member later
+   case GC.
+    %2.1:  First is_true neg
+     apply IH to H3 H1. search.
+    %2.2:  First is_true var
+     apply IH to H3 H1. search.
+    %2.3:  First clause_id
+     apply IH to H3 H1. search.
+
+
+Theorem good_context_not_member_lit_and_neg : forall Ctx L NL,
+  good_context Ctx -> {negate L NL} ->
+  member (is_true L) Ctx -> member (is_true NL) Ctx ->
+  false.
+induction on 1. intros GC Neg MemL MemNL. case GC (keep).
+  %1:  nil Ctx
+   case MemL.
+  %2:  is_true var
+   case MemL.
+     %2.1:  mem here (L = var V)
+      case Neg. case MemNL. backchain H1.
+     %2.2:  mem later
+      case MemNL.
+        %2.2.1:  mem here (NL = var V)
+         case Neg (keep). backchain H1.
+        %2.2.2:  mem later
+         apply IH to H2 Neg H3 H4.
+  %3:  is_true neg
+   case MemL.
+     %3.1:  mem here (L = neg V)
+      case Neg. case MemNL. backchain H1.
+     %3.2:  mem later
+      case MemNL.
+        %3.2.1:  mem here (NL = neg V)
+         case Neg. backchain H1.
+        %3.2.2:  mem later
+         backchain IH.
+  %4:  clause_id
+   case MemL. case MemNL. backchain IH.
+
+
+
+/*
+ * Theorems
+ */
+
+Theorem negate_exists : forall Ctx L,
+  good_context Ctx -> is_lit L -> exists NL, {Ctx |- negate L NL}.
+intros GC IsL. case IsL. search. search.
+
+
+Theorem negate_no_context : forall Ctx L NL,
+  good_context Ctx -> {Ctx |- negate L NL} -> {negate L NL}.
+intros GC Neg. case Neg.
+  %1:  L = var
+   search.
+  %2:  L = neg
+   search.
+  %3:  context
+   apply good_context_member to GC H2. case H3. case H1. case H1.
+
+
+Theorem negate_unique : forall L NL1 NL2,
+  {negate L NL1} -> {negate L NL2} -> NL1 = NL2.
+intros Neg1 Neg2. case Neg1.
+  %1:  L = var
+   case Neg2. search.
+  %2:  L = neg
+   case Neg2. search.
+
+
+Theorem not_is_true_lit_negate : forall Ctx L NL,
+  good_context Ctx -> {Ctx |- negate L NL} ->
+  {Ctx |- is_true L} -> {Ctx |- is_true NL} ->
+  false.
+intros GC Neg TrueL TrueNL. case TrueL.
+apply good_context_member to GC H2. case H3.
+  %1:  is_true L
+   apply negate_no_context to GC Neg. case TrueNL.
+   apply good_context_member to GC H7. case H8.
+     %1.1:  is_true NL
+      case H6. case H1.
+      apply good_context_not_member_lit_and_neg to GC H5 H2 H7.
+     %1.2:  clause_id
+      case H6.
+  %2:  clause_id
+   case H1.
+
+
+Theorem not_sat_unsat_clause : forall Ctx C,
+  good_context Ctx -> is_clause C ->
+  {Ctx |- sat_clause C} -> {Ctx |- unsat_clause C} ->
+  false.
+induction on 3. intros GC IsC Sat Unsat. case Sat.
+  %1:  C = or L Rest, Rest is sat
+   case IsC. case Unsat.
+    %1.1:  unsat rule
+     apply IH to _ _ H1 H6.
+    %1.2:  context
+     apply good_context_member to GC H5. case H6.
+      %1.2.1:  is_true
+       case H4.
+      %1.2.2:  clause_id
+       case H4.
+  %2:  C = or L Rest, L is true
+   case Unsat.
+    %2.1:  unsat rule
+     apply not_is_true_lit_negate to GC H2 H1 H3.
+    %2.2:  context
+     apply good_context_member to GC H3. case H4.
+       %2.2.1:  is_true
+        case H2.
+       %2.2.2:  clause_id
+        case H2.
+  %3:  context
+   apply good_context_member to GC H2. case H3.
+     %3.1:  is_true
+      case H1.
+     %3.2:  clause_id
+      case H1.
+
