@@ -23,6 +23,12 @@ type check_proof   proof -> o.
 
 
 /*
+ *
+ */
+type no_clause   clause_id -> o.
+
+
+/*
  * Give proofs a name so they are easier to read
  */
 kind proof_name   type.

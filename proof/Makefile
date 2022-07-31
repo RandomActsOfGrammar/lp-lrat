@@ -14,7 +14,9 @@ verify: verify.thm sat.sig sat.mod redundant.sig redundant.mod proof.sig proof.m
 #We will assume the not_assigned predicate works.
 
 sat.mod: ../src/sat.mod
-	cp ../src/sat.mod ./
+	cp ../src/sat.mod ./temp.mod
+	grep --invert "!" temp.mod > sat.mod
+	rm temp.mod
 
 sat.sig: ../src/sat.sig
 	cp ../src/sat.sig ./
@@ -28,7 +30,9 @@ redundant.sig: ../src/redundant.sig
 	cp ../src/redundant.sig ./
 
 proof.mod: ../src/proof.mod
-	cp ../src/proof.mod ./
+	cp ../src/proof.mod ./temp.mod
+	grep --invert "!" temp.mod > proof.mod
+	rm temp.mod
 
 proof.sig: ../src/proof.sig
 	cp ../src/proof.sig ./

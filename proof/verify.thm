@@ -24,21 +24,21 @@ Define is_formula : formula -> prop by
  * A good context contains at most is_true of A or -A, not both
  * A good context contains at most ONE binding for a clause ID
  */
-Define good_context : olist -> prop by
-  good_context nil;
-  good_context (is_true (var V)::Rest) :=
+Define assign_context : olist -> prop by
+  assign_context nil;
+  assign_context (is_true (var V)::Rest) :=
      (member (is_true (neg V)) Rest -> false) /\
-     good_context Rest;
-  good_context (is_true (neg V)::Rest) :=
+     assign_context Rest;
+  assign_context (is_true (neg V)::Rest) :=
      (member (is_true (var V)) Rest -> false) /\
-     good_context Rest;
-  good_context (clause_id CID Clause::Rest) :=
-     (exists Other, member (clause_id CID Other) Rest -> false) /\
-     good_context Rest.
+     assign_context Rest;
+  assign_context (clause_id CID Clause::Rest) :=
+     ((exists Other, {Rest |- clause_id CID Other}) -> false) /\
+     assign_context Rest.
 
 
-Theorem good_context_member : forall Ctx F,
-  good_context Ctx -> member F Ctx ->
+Theorem assign_context_member : forall Ctx F,
+  assign_context Ctx -> member F Ctx ->
   (exists L, is_lit L /\ F = is_true L) \/
   (exists CID C, F = clause_id CID C).
 induction on 2. intros GC Mem. case Mem.
@@ -60,8 +60,8 @@ induction on 2. intros GC Mem. case Mem.
      apply IH to H3 H1. search.
 
 
-Theorem good_context_not_member_lit_and_neg : forall Ctx L NL,
-  good_context Ctx -> {negate L NL} ->
+Theorem assign_context_not_member_lit_and_neg : forall Ctx L NL,
+  assign_context Ctx -> {negate L NL} ->
   member (is_true L) Ctx -> member (is_true NL) Ctx ->
   false.
 induction on 1. intros GC Neg MemL MemNL. case GC (keep).
@@ -91,25 +91,94 @@ induction on 1. intros GC Neg MemL MemNL. case GC (keep).
    case MemL. case MemNL. backchain IH.
 
 
+/*
+ * Some situations call for contexts that only contain clause assignments:
+ */
+Define clause_context : olist -> prop by
+  clause_context nil;
+  clause_context (clause_id CID Clause::Rest) :=
+     ((exists Other, {Rest |- clause_id CID Other}) -> false) /\
+     clause_context Rest.
+
+
+Theorem clause_context_assign_context : forall Ctx,
+  clause_context Ctx -> assign_context Ctx.
+induction on 1. intros CC. case CC.
+  %1:  nil
+   search.
+  %2:  clause_id
+   apply IH to H2. search.
+
+
+Theorem clause_context_member : forall Ctx F,
+  clause_context Ctx -> member F Ctx ->
+  exists CID C, F = clause_id CID C.
+induction on 2. intros CC Mem. case Mem.
+  %1:  mem here
+   case CC. search.
+  %2:  mem later
+   case CC. backchain IH.
+
+
+/*
+ * We can expand a context by adding assignments for literals, but not
+ * new clauses.
+ */
+Define expand_context : olist -> olist -> prop by
+  expand_context CC AC :=
+     (forall F, member F CC -> member F AC) /\
+     (forall CID C,
+         member (clause_id CID C) AC -> member (clause_id CID C) CC).
+
+
+Theorem expand_context_add_clause_id : forall CC AC CID C,
+  expand_context CC AC ->
+  expand_context (clause_id CID C::CC) (clause_id CID C::AC).
+intros EC. case EC.
+  %1:  all members remain
+   assert (forall F, member F (clause_id CID C::CC) ->
+                     member F (clause_id CID C::AC)).
+     intros Mem. case Mem.
+       %1.1:  mem here
+        search.
+       %1.2:  mem later
+        apply H1 to H3. search.
+  %2:  only the same clause ID's
+   assert (forall InID InC,
+              member (clause_id InID InC) (clause_id CID C::AC) ->
+              member (clause_id InID InC) (clause_id CID C::CC)).
+     intros Mem. case Mem.
+       %2.1:  mem here
+        search.
+       %2.2:  mem later
+        apply H2 to H4. search.
+search.
+
+
+Theorem expand_context_monotone : forall CC AC F,
+  expand_context CC AC -> {CC |- F} -> {AC |- F}.
+intros EC P. case EC. monotone P with AC. search.
+
+
 
 /*
  * Theorems
  */
 
 Theorem negate_exists : forall Ctx L,
-  good_context Ctx -> is_lit L -> exists NL, {Ctx |- negate L NL}.
+  assign_context Ctx -> is_lit L -> exists NL, {Ctx |- negate L NL}.
 intros GC IsL. case IsL. search. search.
 
 
 Theorem negate_no_context : forall Ctx L NL,
-  good_context Ctx -> {Ctx |- negate L NL} -> {negate L NL}.
+  assign_context Ctx -> {Ctx |- negate L NL} -> {negate L NL}.
 intros GC Neg. case Neg.
   %1:  L = var
    search.
   %2:  L = neg
    search.
   %3:  context
-   apply good_context_member to GC H2. case H3. case H1. case H1.
+   apply assign_context_member to GC H2. case H3. case H1. case H1.
 
 
 Theorem negate_unique : forall L NL1 NL2,
@@ -122,17 +191,17 @@ intros Neg1 Neg2. case Neg1.
 
 
 Theorem not_is_true_lit_negate : forall Ctx L NL,
-  good_context Ctx -> {Ctx |- negate L NL} ->
+  assign_context Ctx -> {Ctx |- negate L NL} ->
   {Ctx |- is_true L} -> {Ctx |- is_true NL} ->
   false.
 intros GC Neg TrueL TrueNL. case TrueL.
-apply good_context_member to GC H2. case H3.
+apply assign_context_member to GC H2. case H3.
   %1:  is_true L
    apply negate_no_context to GC Neg. case TrueNL.
-   apply good_context_member to GC H7. case H8.
+   apply assign_context_member to GC H7. case H8.
      %1.1:  is_true NL
       case H6. case H1.
-      apply good_context_not_member_lit_and_neg to GC H5 H2 H7.
+      apply assign_context_not_member_lit_and_neg to GC H5 H2 H7.
      %1.2:  clause_id
       case H6.
   %2:  clause_id
@@ -140,7 +209,7 @@ apply good_context_member to GC H2. case H3.
 
 
 Theorem not_sat_unsat_clause : forall Ctx C,
-  good_context Ctx -> is_clause C ->
+  assign_context Ctx -> is_clause C ->
   {Ctx |- sat_clause C} -> {Ctx |- unsat_clause C} ->
   false.
 induction on 3. intros GC IsC Sat Unsat. case Sat.
@@ -149,7 +218,7 @@ induction on 3. intros GC IsC Sat Unsat. case Sat.
     %1.1:  unsat rule
      apply IH to _ _ H1 H6.
     %1.2:  context
-     apply good_context_member to GC H5. case H6.
+     apply assign_context_member to GC H5. case H6.
       %1.2.1:  is_true
        case H4.
       %1.2.2:  clause_id
@@ -159,15 +228,153 @@ induction on 3. intros GC IsC Sat Unsat. case Sat.
     %2.1:  unsat rule
      apply not_is_true_lit_negate to GC H2 H1 H3.
     %2.2:  context
-     apply good_context_member to GC H3. case H4.
+     apply assign_context_member to GC H3. case H4.
        %2.2.1:  is_true
         case H2.
        %2.2.2:  clause_id
         case H2.
   %3:  context
-   apply good_context_member to GC H2. case H3.
+   apply assign_context_member to GC H2. case H3.
      %3.1:  is_true
       case H1.
      %3.2:  clause_id
       case H1.
+
+
+Theorem sat_clause_clause_id_ctx : forall Ctx CID C C',
+  assign_context Ctx -> {Ctx, clause_id CID C |- sat_clause C'} ->
+  {Ctx |- sat_clause C'}.
+induction on 2. intros AC P. case P.
+  %1:  sat later
+   apply IH to _ H1. search.
+  %2:  sat here
+   case H1. case H3.
+     %2.1:  backchain clause_id
+      case H2.
+     %2.2:  backchain else
+      apply assign_context_member to AC H4. case H5.
+        %2.2.1:  member is_true
+         case H2. search.
+        %2.2.2:  member clause_id
+         case H2.
+  %3:  context
+   case H2.
+     %3.1:  member clause_id
+      case H1.
+     %3.2:  member rest
+      apply assign_context_member to AC H3. case H4.
+        %3.2.1:  member is_true
+         case H1.
+        %3.2.2:  member clause_id
+         case H1.
+
+
+Theorem sat_clause_id_ctx : forall Ctx CID C F,
+  assign_context Ctx -> {Ctx, clause_id CID C |- sat F} ->
+  {Ctx |- sat F}.
+induction on 2. intros AC P. case P.
+  %1:  f*
+   search.
+  %2:  and
+   apply sat_clause_clause_id_ctx to AC H1. apply IH to AC H2. search.
+  %3:  context
+   case H2.
+     %3.1:  member first
+      case H1.
+     %3.2:  member later
+      apply assign_context_member to AC H3. case H4.
+        %3.2.1:  member is_true
+         case H1.
+        %3.2.2:  member clause_id
+         case H1.
+
+
+/*
+ * We can't prove anything about not_assigned because it uses cut and
+ * fail, so we assume it works.
+ */
+Theorem not_assigned_true_lit : forall Ctx L,
+  {Ctx |- not_assigned L} -> member (is_true L) Ctx -> false.
+skip.
+Theorem not_assigned_false_lit : forall Ctx L NL,
+  {Ctx |- not_assigned L} -> {negate L NL} ->
+  member (is_true NL) Ctx -> false.
+skip.
+/*
+ * The same goes for no_clause
+ */
+Theorem no_clause_unassigned : forall Ctx CID,
+  {Ctx |- no_clause CID} -> (exists C, {Ctx |- clause_id CID C}) ->
+  false.
+skip.
+
+
+Theorem clause_context_no_clause : forall CC CID C,
+  clause_context CC -> {CC |- no_clause CID} ->
+  clause_context (clause_id CID C::CC).
+intros CC NoClause.
+assert (exists Other, {CC |- clause_id CID Other}) -> false.
+   intros Ex. apply no_clause_unassigned to NoClause _.
+search.
+
+
+Theorem assign_context_no_clause : forall AC CID C,
+  assign_context AC -> {AC |- no_clause CID} ->
+  assign_context (clause_id CID C::AC).
+intros AC NoClause.
+assert (exists Other, {AC |- clause_id CID Other}) -> false.
+   intros Ex. apply no_clause_unassigned to NoClause _.
+search.
+
+
+Theorem rup_maintains_sat : forall CC AC NewClause Proof,
+  %Any context with the same clauses but some var assignments
+  clause_context CC -> assign_context AC -> expand_context CC AC ->
+  %that satisfies the existing clauses,
+  (forall CID C, {AC |- clause_id CID C} -> {AC |- sat_clause C}) ->
+  %a new clause RUP with the existing clauses
+  {CC |- rup NewClause Proof} ->
+  %will also be satisfied by the same assignment
+  {AC |- sat_clause NewClause}.
+skip.
+
+
+Theorem empty_clause_unsat : forall Ctx,
+  assign_context Ctx -> {Ctx |- sat_clause c*} -> false.
+intros CC SatC. case SatC. apply assign_context_member to CC H2.
+case H3. case H1. case H1.
+
+
+Theorem check_proof_correct : forall CC ProofList AC,
+  %The unsat proof checks out
+  clause_context CC -> {CC |- check_proof ProofList} ->
+  %and there is a satisfying assignment for the existing clauses---
+  assign_context AC -> expand_context CC AC ->
+  (forall CID C, {AC |- clause_id CID C} -> {AC |- sat_clause C}) ->
+  %this is impossible
+  false.
+induction on 2. intros CC Check AC EC Sat. case Check.
+  %1:  end proof
+   apply rup_maintains_sat to CC AC EC Sat H2.
+   apply empty_clause_unsat to AC H3.
+  %2:  step proof
+   apply rup_maintains_sat to CC AC EC Sat H2.
+   NewEC: apply expand_context_add_clause_id to EC with CID = CID, C = C.
+   NewCC: apply clause_context_no_clause to CC H1 with C = C.
+   ACNoClause: apply expand_context_monotone to EC H1.
+   NewAC: apply assign_context_no_clause to AC ACNoClause with C = C.
+   apply IH to NewCC H3 NewAC NewEC _. intros ExClauseID.
+   case ExClauseID. case H6.
+     %2.1:  mem here
+      case H5. skip.
+     %2.2:  mem later
+      apply assign_context_member to AC H7. case H8.
+        %2.2.1:  member is_true
+         case H5.
+        %2.2.2:  member clause_id
+         case H5 (keep). assert {AC |- clause_id CID1 C1}.
+         ACSatClause: apply Sat to H9.
+         monotone ACSatClause with (clause_id CID C::AC). search.
+  %3:  context
+   apply clause_context_member to CC H2. case H1.
 
