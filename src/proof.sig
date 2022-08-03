@@ -3,37 +3,40 @@ sig proof.
 accum_sig redundant.
 
 
-kind proof_line   type.
-
-type proof_line   clause_id -> clause -> list clause_id -> proof_line.
-
-
 kind proof   type.
 
-type p*         proof.
-type add_line   proof_line -> proof -> proof.
+type p*         list clause_id -> proof. /*implicit empty clause*/
+type add_line   clause -> list clause_id -> (clause_id -> proof) ->
+                proof.
 /*Note we do not have delete lines.  We can't delete clauses, so we
   can ignore the delete lines.*/
 
 
 /*
  * Check whether a full proof is valid
+ * Assumes original clauses are in context
  */
 type check_proof   proof -> o.
+
+
+kind problem   type.
+
+type end_problem   proof -> problem.
+type add_clause    clause -> (clause_id -> problem) -> problem.
 
 
 /*
  *
  */
-type no_clause   clause_id -> o.
+type check_problem   problem -> o.
 
 
 /*
- * Give proofs a name so they are easier to read
+ * Give problems a name so they are easier to read
  */
-kind proof_name   type.
+kind problem_name   type.
 
-type a_proof   proof_name.
+type a_problem   problem_name.
 
-type proof_name   proof_name -> proof -> o.
+type problem_name   problem_name -> problem -> o.
 
