@@ -101,7 +101,7 @@ echo
 
 
 #run it and try it to get a result
-lpcmd="proof_name a_proof P, check_proof P."
+lpcmd="problem_name a_problem P, check_problem P."
 lpresult=$(echo $lpcmd | tjsim $output_file)
 res=$?
 if ! [ $res -eq 0 ]; then

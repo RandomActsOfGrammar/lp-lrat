@@ -6,12 +6,10 @@ lines), and turns it into a Lambda Prolog file that can then be
 checked by the Lambda Prolog proof checker.  There are several things
 this encoding does:
  * Create var constants for all the variables in the problem
- * Create clause_id constants for all the clauses in the original
-   problem and the proof
- * Build the appropriate clause structure and associate it with the
-   clause_id for that clause
- * Associate the whole problem with the proof_name a_proof constant to
-   make it easy to run
+ * Build the clauses and put them into a Lambda Prolog problem
+ * Build the proof and add it to the Lambda Prolog problem
+ * Associate the whole problem with the problem_name a_problem
+   constant to make it easy to run
 '''
 
 import argparse
@@ -66,14 +64,6 @@ def create_var_def(var_num):
     return "type " + create_var_name(var_num) + "   var.\n"
 
 
-#Turn a clause ID into a Lambda Prolog clause_id def
-#Argument:
-#  clause_id:  integer number of clause in problem
-#Return:  string clause_id def
-def create_clause_id_def(clause_id):
-    return "type " + create_clause_id(clause_id) + "   clause_id.\n"
-
-
 #Turn a numeric literal into a Lambda Prolog lit
 #Argument:
 #  int_lit:  positive or negative integer literal
@@ -97,41 +87,59 @@ def build_clause(lits):
     return clause
 
 
-#Build a declaration of a clause having a certain ID
+#Build a string Lambda Prolog abstraction
 #Arguments:
-#  clause_id:  integer clause ID
-#  clause:  string Lambda Prolog clause
-#Return:  string clause ID--clause association
-def associate_clause_id(clause_id, clause):
-    return "clause_id " + create_clause_id(clause_id) + " " + \
-        clause + ".\n"
+#  var:  name of the variable to bind
+#  body:  string Lambda Prolog term (optionally) using var
+#Return:  string abstraction
+def build_abstraction(var, body):
+    return "(" + var + r"\ " + body +")"
 
 
 #Build a proof_line string
 #Arguments:
-#  clause_id:  integer clause ID
 #  lits:  integer clause literals
 #  proof_clauses:  integer proof clause ID's
 #Return:  string Lambda Prolog proof_line
-def build_proof_line(clause_id, lits, proof_clauses):
+def build_proof_line(lits, proof_clauses):
     clause = build_clause(lits)
     proof_ids = list(map(create_clause_id, proof_clauses))
     proof = ", ".join(proof_ids)
-    return "(proof_line " + create_clause_id(clause_id) + " " + \
-        clause + " [" + proof + "])"
+    #non-empty clause has more proofs to follow
+    if len(lits) > 0:
+        return "add_line " + clause + " [" + proof + "]"
+    #empty clause ends it
+    else:
+        return "p* [" + proof + "]"
 
 
-#Build a Lambda Prolog definition of a proof by name a_proof
+#Build a Lambda Prolog proof string
 #Argument:
-#  proof_lines:  list of string proof_lines
-#Return:  string Lambda Prolog proof name declaration
-def build_proof_name_declaration(proof_lines):
-    #build the proof
-    proof = "p*"
-    for pl in proof_lines[::-1]:
-        proof = "(add_line " + pl + " " + proof + ")"
-    #declare the proof name
-    return "proof_name a_proof " + proof + ".\n"
+#  proof_lines:  list of pairs of (partial proof line, clause_id)
+#Return:  string Lambda Prolog proof
+def build_proof(proof_lines):
+    proof, _ = proof_lines[-1]
+    rest = proof_lines[:-1]
+    for pline, cid in rest[::-1]:
+        var_cid = create_clause_id(cid)
+        proof = pline + " (" + build_abstraction(var_cid, proof) + ")"
+    return proof
+
+
+#Build a Lambda Prolog definition of a problem by name a_problem
+#Arguments:
+#  clauses;  list of pairs of (string Lambda Prolog clauses, clause ID
+#            name)
+#  proof:  string Lambda Prolog proof
+#Return:  string Lambda Prolog problem name declaration
+def build_problem_name_declaration(clauses, proof):
+    #build the problem
+    problem = "end_problem (" + proof + ")"
+    for c, cid in clauses[::-1]: #go through backward
+        problem = "add_clause (" + c + ") " + \
+            build_abstraction(cid, problem)
+    #declare the problem name
+    return "problem_name a_problem (" + problem + ").\n"
 
 
 
@@ -143,10 +151,10 @@ def build_proof_name_declaration(proof_lines):
 #Process the DIMACS file, converting its contents to Lambda Prolog
 #Arguments:
 #  dimacs_filename:  DIMACS file to read
-#  outmod:  open file into which to write the module output
 #  outsig:  open file into which to write the signature output
-#Return:  number of clauses or -1 for failure (prints error message)
-def process_dimacs(dimacs_filename, outmod, outsig):
+#Return:  pair of (number of clauses or -1 for failure (prints error
+#         message), list of pairs of (string clause, clause ID))
+def process_dimacs(dimacs_filename, outsig):
     #check if it exists and open it
     if not os.path.exists(dimacs_filename):
         print("DIMACS file '" + dimacs_filename + "' does not exist")
@@ -160,22 +168,22 @@ def process_dimacs(dimacs_filename, outmod, outsig):
         return num_clauses
 
     #read the clauses and output them
-    read_clauses = parse_dimacs_clauses(dfile, dimacs_filename, outmod)
-    if read_clauses < 0:
+    num_read, clauses = parse_dimacs_clauses(dfile, dimacs_filename)
+    if num_read < 0:
         dfile.close()
-        return read_clauses
-    if read_clauses != num_clauses:
+        return (num_read, [])
+    if num_read != num_clauses:
         print("DIMACS header declared", num_clauses,
-              "clauses but contained", read_clauses, "clauses")
+              "clauses but contained", num_read, "clauses")
         dfile.close()
-        return -1
+        return (-1, [])
 
     dfile.close()
-    return num_clauses
+    return (num_clauses, clauses)
 
 
 #Move past comments and parse DIMACS header:  p cnf <vars> <clauses>
-#Output the variables and clause ID's into the outmod
+#Output the variables into the outsig
 #Arguments:
 #  dfile:  open DIMACS file for reading
 #  dimacs_filename:  DIMACS filename for printing error messages
@@ -208,22 +216,19 @@ def parse_dimacs_header(dfile, dimacs_filename, outsig):
     for i in range(1, num_vars + 1):
         outsig.write(create_var_def(i))
 
-    #create all the clause ID's for the original clauses
-    for i in range(1, num_clauses + 1):
-        outsig.write(create_clause_id_def(i))
-
     return num_clauses
 
 
-#Output the clauses from the DIMACS file into the outmod
+#Return the clauses from the DIMACS file as Lambda Prolog strings
 #Arguments:
 #  dfile:  open DIMACS file for reading
 #  dimacs_filename:  DIMACS filename for prenting error messages
-#  outmod:  open file into which to write the module output
-#Return:  number of clauses read or -1 for failure
-def parse_dimacs_clauses(dfile, dimacs_filename, outmod):
+#Return:  pair of (number of clauses read or -1 for failure,
+#         list of pairs of (string clauses, clause ID))
+def parse_dimacs_clauses(dfile, dimacs_filename):
     line = dfile.readline()
     clause_count = 0
+    clauses = []
     while line:
         #only handle non-blank, non-comment lines
         if not line.isspace() and line[0] != "c":
@@ -232,14 +237,14 @@ def parse_dimacs_clauses(dfile, dimacs_filename, outmod):
             if split_line[-1] != "0":
                 print("Error in clause " + str(clause_count) + \
                       ":  Does not end with 0")
-                return -1
+                return (-1, [])
             #put the clause literals into a list
             clause_lits = list(map(int, split_line[:-1]))
             #build clause definition
             clause = build_clause(clause_lits)
-            outmod.write(associate_clause_id(clause_count, clause))
+            clauses += [(clause, create_clause_id(clause_count))]
         line = dfile.readline()
-    return clause_count
+    return (clause_count, clauses)
 
 
 
@@ -251,15 +256,14 @@ def parse_dimacs_clauses(dfile, dimacs_filename, outmod):
 #Process the LRAT file, converting its contents to Lambda Prolog
 #Arguments:
 #  lrat_filename:  LRAT file to read
-#  outmod:  open file into which to write the module output
-#  outsig:  open file into which to write the signatuer output
 #  num_original_clauses:  number of clauses in the original problem
-#Return:  True for success, False for failure (prints error message)
-def process_lrat(lrat_filename, outmod, outsig, num_original_clauses):
+#Return:  pair of (True for success, False for failure (prints error
+#         message), Lambda Prolog proof string)
+def process_lrat(lrat_filename, num_original_clauses):
     #check if it exists and open it
     if not os.path.exists(lrat_filename):
         print("LRAT file '" + lrat_filename + "' does not exist")
-        return False
+        return (False, "")
     lfile = open(lrat_filename, "r")
     #read all the lines and build a list of Lambda Prolog proof_lines
     proof_lines = []
@@ -267,29 +271,28 @@ def process_lrat(lrat_filename, outmod, outsig, num_original_clauses):
     while line:
         #only handle non-blank, non-comment lines
         if not line.isspace() and line[0] != "c":
-            result, pline = process_lrat_line(line, outsig)
+            result, pline, cid = process_lrat_line(line)
             #check for failure of line processing
             if not result:
                 lfile.close()
-                return False
+                return (False, "")
             #add the line to the lines if it is not blank
             if pline != "":
-                proof_lines.append(pline)
-        line = lfile.readline()
-    #output the proof to the file
-    outmod.write(build_proof_name_declaration(proof_lines))
+                proof_lines += [(pline, cid)]
+        line = lfile.readline()        
+    #finish
+    proof = build_proof(proof_lines)
     lfile.close()
-    return True
+    return (True, proof)
 
 
-#Process a single, non-empty LRAT line to output its new clause ID's
-#to Lambda Prolog in the outmod and return the proof_line
+#Process a single, non-empty LRAT line to return the proof_line
 #Arguments:
 #  line:  line as read from file
-#  outsig:  open file into which to write the signature output
-#Return:  Pair of (was successful, Lambda Prolog translation)---
-#   translation is empty string for delete lines
-def process_lrat_line(line, outsig):
+#Return:  Tuple of (was successful, Lambda Prolog translation,
+#         clause ID number)
+#         Translation is empty string for delete lines
+def process_lrat_line(line):
     split_line = line.split()
     #skip delete lines
     if split_line[1] != "d":
@@ -298,7 +301,7 @@ def process_lrat_line(line, outsig):
         #check we have at least the last zero
         if rest[-1] != 0:
             print("Added clause", clause_id, "is incomplete")
-            return (False, "")
+            return (False, "", 0)
         first_zero = rest.index(0)
         clause_lits = rest[:first_zero]
         proof_clauses = rest[first_zero + 1:-1]
@@ -306,13 +309,11 @@ def process_lrat_line(line, outsig):
         if proof_clauses == []:
             print("Added clause", clause_id, "is incomplete")
             return (False, "")
-        #declare this new clause ID
-        outsig.write(create_clause_id_def(clause_id))
         #build the proof line
-        pline = build_proof_line(clause_id, clause_lits, proof_clauses)
-        return (True, pline)
+        pline = build_proof_line(clause_lits, proof_clauses)
+        return (True, pline, clause_id)
     else:
-        return (True, "")
+        return (True, "", 0)
 
 
 
@@ -363,15 +364,22 @@ def main():
     write_mod_header(module_base, outmod)
 
     #parse and process the DIMACS file
-    num_original_clauses = process_dimacs(args.dimacs, outmod, outsig)
-    if num_original_clauses < 0:
+    num_original, clauses = process_dimacs(args.dimacs, outsig)
+    if num_original < 0:
         outsig.close()
         outmod.close()
-        return num_original_clauses
+        return num_original
 
     #parse and process the LRAT file
-    result = process_lrat(args.lrat, outmod, outsig,
-                          num_original_clauses)
+    result, lp_proof = process_lrat(args.lrat, num_original)
+    if not result:
+        outsig.close()
+        outmod.close()
+        return -1
+
+    #build and write the module output
+    proof = build_problem_name_declaration(clauses, lp_proof)
+    outmod.write(proof)
 
     outsig.close()
     outmod.close()
