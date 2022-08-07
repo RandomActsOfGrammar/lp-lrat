@@ -64,6 +64,11 @@ Define is_proof : proof -> prop by
   is_proof (add_line C PL AbsRest) :=
     is_clause C /\ nabla x, is_proof (AbsRest x).
 
+Define is_problem : problem -> prop by
+  is_problem (end_problem P) := is_proof P;
+  is_problem (add_clause C Rest) :=
+    nabla x, is_clause C /\ is_problem (Rest x).
+
 
 Theorem lit_eq_or_not : forall L1 L2,
   is_lit L1 -> is_lit L2 -> (L1 = L2 \/ (L1 = L2 -> false)).
@@ -107,7 +112,7 @@ induction on 1. intros Mem. case Mem. backchain IH.
  * We need to close some terms so we know nominal constants of one
  * type cannot occur inside others.
  */
-Close var, clause_id, lit, clause.
+Close var, clause_id, lit, clause, formula.
 
 
 
@@ -882,4 +887,103 @@ induction on 3. intros IsP CC Check AC EC Sat. case Check.
          monotone AC3Sat with (clause_id n1 C::AC3). search.
   %3:  context
    apply clause_context_member to CC H2. case H1.
+
+
+
+
+/********************************************************************
+ *                          CHECK PROBLEM                           *
+ ********************************************************************/
+
+Define problem_to_formula : problem -> formula -> prop by
+  problem_to_formula (end_problem P) f*;
+  problem_to_formula (add_clause C PRest) (and C FRest) :=
+    nabla CID, problem_to_formula (PRest CID) FRest.
+
+
+Theorem problem_to_formula_exists : forall P,
+  is_problem P -> exists F, problem_to_formula P F.
+induction on 1. intros IsP. IsP': case IsP.
+  %1:  end_problem
+   search.
+  %2:  add_clause
+   apply IH to IsP'1. search.
+
+
+Theorem check_problem_correct_help : forall CC AC P F,
+  is_problem P ->
+  %Having an assignment context with all the clauses
+  clause_context CC -> expand_context CC AC -> assign_context AC ->
+  %that satisfies the clauses in the context
+  (forall CID C, {AC |- clause_id CID C} -> {AC |- sat_clause C}) ->
+  %and satisfies the rest of the formula
+  {AC |- sat F} ->
+  %where the problem proof checks out
+  {CC |- check_problem P} ->
+  %and F is the result of converting the problem
+  problem_to_formula P F ->
+  %is impossible
+  false.
+induction on 7. intros IsP CC EC AC SatC SatF Check PtoF.
+Check': case Check.
+  %1:  end problem
+   IsP': case IsP. case PtoF.
+   apply check_proof_correct to IsP' CC Check' AC EC SatC.
+  %2:  step problem
+   IsP': case IsP (keep).
+   PtoF': case PtoF.
+   NewCC: assert clause_context (clause_id n1 C::CC).
+   NewEC: apply expand_context_add_both to EC with F = clause_id n1 C.
+   NewAC: assert assign_context (clause_id n1 C::AC).
+   SatF': case SatF.
+     %2.1:  sat by rule
+      SatF: monotone SatF'1 with (clause_id n1 C::AC).
+      apply IH to IsP'1 NewCC NewEC NewAC _ SatF Check' PtoF'.
+      intros Lkp. Lkp': case Lkp. Mem: case Lkp'1.
+        %2.1.1:  member first
+         case Lkp'. monotone SatF' with (clause_id n1 C1::AC). search.
+        %2.1.2:  member later
+         Mem': apply assign_context_member to AC Mem. case Mem'.
+           %2.1.2.1:  is_true
+            case Lkp'.
+           %2.1.2.2:  clause_id
+            case Lkp'. AC_CID: assert {AC |- clause_id (CID1 n1) C2}.
+            SatCl: apply SatC to AC_CID.
+            monotone SatCl with (clause_id n1 C::AC). search.
+     %2.2:  sat by context
+      Mem: apply assign_context_member to AC SatF'1. case Mem.
+        %2.2.1:  is_true
+         case SatF'.
+        %2.2.2:  clause_id
+         case SatF'.
+  %3:  context
+   apply clause_context_member to CC Check'1. case Check'.
+
+
+Theorem check_problem_correct : forall P F AC,
+  %Checking a problem and
+  is_problem P -> {check_problem P} ->
+  %having a context with just literal assignments (most basic sat ctx)
+  assign_context AC ->
+  (forall F, member F AC -> exists L, F = is_true L) ->
+  %under which the problem's formula is satisfiable
+  problem_to_formula P F -> {AC |- sat F} ->
+  %is impossible
+  false.
+intros IsP Check AC JustLits PtoF Sat.
+EC: assert expand_context nil AC.
+      assert forall F, member F nil -> member F AC.
+        intros Mem. case Mem.
+      assert forall CID C, member (clause_id CID C) AC ->
+                member (clause_id CID C) nil.
+        intros Mem. apply JustLits to Mem.
+      search.
+CC: assert clause_context nil.
+apply check_problem_correct_help to IsP CC EC AC _ Sat Check PtoF.
+intros CID. CID: case CID.
+Mem: apply assign_context_member to AC CID1. Mem': case Mem.
+  %2:  member is_true
+   case CID.
+  %3:  member clause_id
+   EC': case EC. MemNil: apply EC'1 to CID1. case MemNil.
 
