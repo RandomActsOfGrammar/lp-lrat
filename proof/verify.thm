@@ -28,6 +28,10 @@ skip.
  * prove this.  However, since some problems will require more
  * variables than others, we don't want to define them in general,
  * since we wouldn't always have enough.
+ *
+ * We could also think of using some method of defining variables such
+ * that we could build any number of them.  I think this would be a
+ * bad thing for checking efficiency, so this is a compromise.
  */
 Theorem var_eq_or_not : forall (V1 V2 : var),
   V1 = V2 \/ (V1 = V2 -> false).
@@ -467,8 +471,18 @@ Theorem negate_is_lit : forall L NL, {negate L NL} -> is_lit L.
 intros Neg. case Neg. search. search.
 
 
-Theorem negate_reverse : forall L NL, {negate L NL} -> {negate NL L}.
+Theorem negate_symmetric : forall L NL, {negate L NL} -> {negate NL L}.
 intros. case H1. search. search.
+
+
+Theorem negate_expand_assign_context : forall AC C L NL,
+  assign_context AC -> expand_context AC C -> is_lit L ->
+  {negate L NL} -> (member (is_true L) C -> false) ->
+  assign_context (is_true NL::AC).
+intros AC EC IsL Neg NotMem.
+backchain assign_context_add_is_true_not_mem with AC = AC, NL = L.
+backchain negate_symmetric. EC': case EC. intros Mem. backchain NotMem.
+backchain EC'.
 
 
 
@@ -762,24 +776,6 @@ induction on 2. intros AC RupHelp EC ACSat Sat. case RupHelp.
       case H1.
 
 
-/*
- * This is a lemma for rup_maintains_sat that can't be done until we have negate theorems, so it's here
- */
-Theorem assign_context_expand : forall AC C L NL,
-  assign_context AC -> expand_context AC C -> is_lit L ->
-  {negate L NL} -> (member (is_true L) C -> false) ->
-  assign_context (is_true NL::AC).
-intros AC EC IsL Neg NotMem.
-backchain assign_context_add_is_true_not_mem with AC = AC, NL = L.
-backchain negate_reverse. EC': case EC. intros Mem. backchain NotMem.
-backchain EC'.
-
-
-%Sat and the clause being unsatisfied with rup_help implies false?
-
-%Unsat clause under a context and rup_help implies sat must also satisfy that clause?  It needs to be *exactly* unsat that clause though; anything larger would mean it could be something else changed
-
-
 Theorem rup_maintains_sat : forall AC1 AC2 NewClause Proof,
   %Any context with the same clauses but some more var assignments
   assign_context AC1 -> assign_context AC2 ->
@@ -801,9 +797,10 @@ induction on 6. intros AC1 AC2 EC IsC Sat RUP. RUP': case RUP.
       search.
      %2.2:  L not member of sat context
       Neg: apply negate_no_context to _ RUP'.
-      NewAC: apply assign_context_expand to AC1 EC Is Neg MemL'.
+      NewAC: apply negate_expand_assign_context to
+                AC1 EC Is Neg MemL'.
       Neg: apply negate_no_context to AC1 RUP'.
-      NegR: apply negate_reverse to Neg.
+      NegR: apply negate_symmetric to Neg.
       IsNL: apply negate_is_lit to NegR.
       MemNL: apply assign_context_member_or_not to AC2 IsNL.
       MemNL': case MemNL.
