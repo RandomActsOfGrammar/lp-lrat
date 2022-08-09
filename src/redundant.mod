@@ -18,6 +18,18 @@ rup_help (CID::Rest) :-
    clause_id CID C, unit_clause C L, is_true L => rup_help Rest.
 
 
+/*
+ * Like rup and rup_help, but with search for valid clauses instead of
+ * having them given
+ */
+drup c* :- drup_help nil.
+drup (or L CRest) :-
+   negate L NL, is_true NL => drup CRest.
+drup_help X :- clause_id CID C, unsat_clause C.
+drup_help X :-
+   clause_id CID C, unit_clause C L, is_true L => drup_help Rest.
+
+
 /*first literal is the unit*/
 unit_clause (or L Rest) L :- not_assigned L, unsat_clause Rest.
 /*first literal is falsified*/

@@ -5,9 +5,11 @@ accum_sig redundant.
 
 kind proof   type.
 
-type p*         list clause_id -> proof. /*implicit empty clause*/
-type add_line   clause -> list clause_id -> (clause_id -> proof) ->
-                proof.
+type p*           list clause_id -> proof. /*implicit empty clause*/
+type short_p*     proof. /*implicit empty clause*/
+type add_line     clause -> list clause_id -> (clause_id -> proof) ->
+                  proof.
+type short_line   clause -> (clause_id -> proof) -> proof.
 /*Note we do not have delete lines.  We can't delete clauses, so we
   can ignore the delete lines.*/
 

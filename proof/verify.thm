@@ -61,7 +61,10 @@ Define is_formula : formula -> prop by
 
 Define is_proof : proof -> prop by
   is_proof (p* PL);
+  is_proof short_p*;
   is_proof (add_line C PL AbsRest) :=
+    is_clause C /\ nabla x, is_proof (AbsRest x);
+  is_proof (short_line C AbsRest) :=
     is_clause C /\ nabla x, is_proof (AbsRest x).
 
 Define is_problem : problem -> prop by
@@ -844,6 +847,105 @@ induction on 6. intros AC1 AC2 EC IsC Sat RUP. RUP': case RUP.
 
 
 /********************************************************************
+ *                               DRUP                               *
+ ********************************************************************/
+
+Theorem drup_help_unsat : forall AC Sat X,
+  %Having both drup_help (a successful proof line)
+  assign_context AC -> {AC |- drup_help X} ->
+  %and a superset satisfying assignment
+  expand_context AC Sat -> assign_context Sat ->
+  (forall InID InC,
+      {Sat |- clause_id InID InC} -> {Sat |- sat_clause InC}) ->
+  %is impossible
+  false.
+induction on 2. intros AC RupHelp EC ACSat Sat. case RupHelp.
+  %1:  last proof clause
+   SatCID: apply expand_context_monotone to EC H1.
+   SatSat: apply Sat to SatCID.
+   SatUnsat: apply expand_context_monotone to EC H2.
+   apply not_sat_unsat_clause to ACSat SatSat SatUnsat.
+  %2:  step proof clause
+   SatCID: apply expand_context_monotone to EC H1.
+   SatC: apply Sat to SatCID.
+   Mem: apply unit_clause_expand_context to AC H2 ACSat EC SatC.
+   AddEC: apply expand_context_add_member to EC Mem.
+   NAL: apply unit_clause_not_assigned to AC H2.
+   IsC:  apply clause_id_is_clause to AC H1.
+   IsL:  apply unit_clause_is_lit to AC IsC H2.
+   ACAdd: apply assign_context_add_is_true to AC IsL NAL.
+   apply IH to ACAdd H3 AddEC ACSat Sat.
+  %3:  context
+   apply assign_context_member to AC H2. case H3.
+     %3.1:  member is_true
+      case H1.
+     %3.2:  member clause_id
+      case H1.
+
+
+Theorem drup_maintains_sat : forall AC1 AC2 NewClause,
+  %Any context with the same clauses but some more var assignments
+  assign_context AC1 -> assign_context AC2 ->
+  expand_context AC1 AC2 -> is_clause NewClause ->
+  %that satisfies the existing clauses,
+  (forall CID C, {AC2 |- clause_id CID C} -> {AC2 |- sat_clause C}) ->
+  %a new clause RUP with the existing clauses
+  {AC1 |- drup NewClause} ->
+  %will also be satisfied by the same assignment
+  exists AC3, expand_context AC2 AC3 /\
+              {AC3 |- sat_clause NewClause} /\ assign_context AC3.
+induction on 6. intros AC1 AC2 EC IsC Sat RUP. RUP': case RUP.
+  %1:  RUP empty clause
+   apply drup_help_unsat to AC1 RUP' EC AC2 Sat.
+  %2:  RUP or
+   Is: case IsC. MemL: apply assign_context_member_or_not to AC2 Is.
+   MemL': case MemL.
+     %2.1:  L member of sat context (new clause sat here)
+      search.
+     %2.2:  L not member of sat context
+      Neg: apply negate_no_context to _ RUP'.
+      NewAC: apply negate_expand_assign_context to
+                AC1 EC Is Neg MemL'.
+      Neg: apply negate_no_context to AC1 RUP'.
+      NegR: apply negate_symmetric to Neg.
+      IsNL: apply negate_is_lit to NegR.
+      MemNL: apply assign_context_member_or_not to AC2 IsNL.
+      MemNL': case MemNL.
+        %2.2.1:  NL member of sat context
+         NewEC: apply expand_context_add_member to EC MemNL'.
+         apply IH to NewAC AC2 NewEC Is1 Sat RUP'1. search.
+        %2.2.2:  NL not member of sat context
+         NewEC: apply expand_context_add_both to EC
+                   with F = is_true NL.
+         NewAC2: apply assign_context_add_is_true_not_mem to
+                    AC2 _ MemL'.
+         NewSat: assert forall CID C,
+                           {AC2, is_true NL |- clause_id CID C} ->
+                           {AC2, is_true NL |- sat_clause C}.
+            intros CID. CID': case CID. case CID'1.
+              %member first
+               case CID'.
+              %member later
+               apply assign_context_member to AC2 H1. case H2.
+                 %member is_true
+                  case CID'.
+                 %member clause_id
+                  case CID'. CID2: assert {AC2 |- clause_id CID C}.
+                  ShortSat: apply Sat to CID2.
+                  monotone ShortSat with (is_true NL::AC2). search.
+         apply IH to NewAC NewAC2 NewEC Is1 NewSat RUP'1.
+         EC3: assert expand_context AC2 AC3. skip. search.
+  %3:  context
+   apply assign_context_member to AC1 RUP'1. case H1.
+     %3.1:  member is_true
+      case RUP'.
+     %3.2:  member clause_id
+      case RUP'.
+
+
+
+
+/********************************************************************
  *                           CHECK PROOF                            *
  ********************************************************************/
 
@@ -857,11 +959,15 @@ Theorem check_proof_correct : forall CC ProofList AC,
   %this is impossible
   false.
 induction on 3. intros IsP CC Check AC EC Sat. case Check.
-  %1:  end proof
+  %1:  end proof with proof hints
    CCAC: apply clause_context_assign_context to CC.
    RUPRes: apply rup_maintains_sat to CCAC AC EC _ Sat H1.
    apply empty_clause_unsat to RUPRes2 RUPRes1.
-  %2:  step proof
+  %2:  end proof without proof hints
+   CCAC: apply clause_context_assign_context to CC.
+   RUPRes: apply drup_maintains_sat to CCAC AC EC _ Sat H1.
+   apply empty_clause_unsat to RUPRes2 RUPRes1.
+  %3:  step proof
    Is': case IsP.
    CCAC: apply clause_context_assign_context to CC.
    RUPRes: apply rup_maintains_sat to CCAC AC EC Is' Sat H1.
@@ -872,20 +978,44 @@ induction on 3. intros IsP CC Check AC EC Sat. case Check.
              F = clause_id n1 C.
    Sub: apply IH to Is'1 NewCC H2 NewAC NewEC _. intros ExClauseID.
    ECI: case ExClauseID. Mem: case ECI1.
-     %2.1:  mem here
+     %3.1:  mem here
       case ECI. monotone RUPRes1 with (clause_id n1 C1::AC3). search.
-     %2.2:  mem later
+     %3.2:  mem later
       Mem': apply assign_context_member to RUPRes2 Mem. case Mem'.
-        %2.2.1:  mem is_true
+        %3.2.1:  mem is_true
          case ECI.
-        %2.2.2:  mem clause_id
+        %3.2.2:  mem clause_id
          case ECI. AC3CID: assert {AC3 |- clause_id (CID n1) C1}.
          ECCond: case RUPRes (keep). MemAC: apply ECCond1 to Mem.
          ACCID: assert {AC |- clause_id (CID n1) C1}.
          ACSat: apply Sat to ACCID.
          AC3Sat: apply expand_context_monotone to RUPRes ACSat.
          monotone AC3Sat with (clause_id n1 C::AC3). search.
-  %3:  context
+  %4:  step proof
+   Is': case IsP.
+   CCAC: apply clause_context_assign_context to CC.
+   RUPRes: apply drup_maintains_sat to CCAC AC EC Is' Sat H1.
+   NewCC: assert clause_context (clause_id n1 C::CC).
+   NewAC: assert assign_context (clause_id n1 C::AC3).
+   EC_CC_AC3: apply expand_context_transitive to EC RUPRes.
+   NewEC: apply expand_context_add_both to EC_CC_AC3 with
+             F = clause_id n1 C.
+   Sub: apply IH to Is'1 NewCC H2 NewAC NewEC _. intros ExClauseID.
+   ECI: case ExClauseID. Mem: case ECI1.
+     %4.1:  mem here
+      case ECI. monotone RUPRes1 with (clause_id n1 C1::AC3). search.
+     %4.2:  mem later
+      Mem': apply assign_context_member to RUPRes2 Mem. case Mem'.
+        %4.2.1:  mem is_true
+         case ECI.
+        %4.2.2:  mem clause_id
+         case ECI. AC3CID: assert {AC3 |- clause_id (CID n1) C1}.
+         ECCond: case RUPRes (keep). MemAC: apply ECCond1 to Mem.
+         ACCID: assert {AC |- clause_id (CID n1) C1}.
+         ACSat: apply Sat to ACCID.
+         AC3Sat: apply expand_context_monotone to RUPRes ACSat.
+         monotone AC3Sat with (clause_id n1 C::AC3). search.
+  %5:  context
    apply clause_context_member to CC H2. case H1.
 
 

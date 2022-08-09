@@ -26,6 +26,20 @@ type rup_help   list clause_id -> o.
 
 
 /*
+ * Check the clause follows from the existing clauses in the context
+ * by reverse unit propagation.
+ */
+type drup   clause -> o.
+
+
+/*
+ * Actually do the reverse unit propagation from a set of assumptions
+ * Teyjus won't let us do this without an argument, so random type
+ */
+type drup_help   list clause_id -> o.
+
+
+/*
  * Determine if a clause is unit under he assumptions, and give that
  * unit literal back
  */

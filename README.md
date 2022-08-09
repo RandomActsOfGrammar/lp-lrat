@@ -28,6 +28,9 @@ predicate from the proof checker specification that uses `!` (cut) and
 verify that checking a problem (formula and unsatisfiability proof)
 and having a satisfying assignment is impossible.
 
+Note that the program used to translate the DIMACS file and proof file
+into Lambda Prolog is written in Python and is not verified.
+
 
 ## Software Requirements
 This is assuming you are using
