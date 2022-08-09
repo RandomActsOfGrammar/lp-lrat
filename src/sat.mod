@@ -1,7 +1,7 @@
 module sat.
 
-sat_clause (or L Rest) :- sat_clause Rest.
 sat_clause (or L Rest) :- is_true L.
+sat_clause (or L Rest) :- sat_clause Rest.
 
 
 sat f*.

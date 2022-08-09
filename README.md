@@ -1,5 +1,5 @@
 
-# lp-lrat
+# Lambda Prolog LRAT Checker
 A verified proof checker for [LRAT
 proofs](https://www.cs.cmu.edu/~mheule/publications/lrat.pdf) written
 in Lambda Prolog.  More accurately, this checks LRUP proofs---clauses
