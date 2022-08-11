@@ -103,14 +103,23 @@ def build_abstraction(var, body):
 #Return:  string Lambda Prolog proof_line
 def build_proof_line(lits, proof_clauses):
     clause = build_clause(lits)
-    proof_ids = list(map(create_clause_id, proof_clauses))
-    proof = ", ".join(proof_ids)
-    #non-empty clause has more proofs to follow
-    if len(lits) > 0:
-        return "add_line " + clause + " [" + proof + "]"
-    #empty clause ends it
+    #check whether there is a proof given
+    if len(proof_clauses) > 0:
+        proof_ids = list(map(create_clause_id, proof_clauses))
+        proof = ", ".join(proof_ids)
+        #non-empty clause has more proofs to follow
+        if len(lits) > 0:
+            return "add_line " + clause + " [" + proof + "]"
+        #empty clause ends it
+        else:
+            return "p* [" + proof + "]"
     else:
-        return "p* [" + proof + "]"
+        #non-empty clause has more proofs to follow
+        if len(lits) > 0:
+            return "short_line " + clause
+        #empty clause ends it
+        else:
+            return "short_p*"
 
 
 #Build a Lambda Prolog proof string
@@ -128,7 +137,7 @@ def build_proof(proof_lines):
 
 #Build a Lambda Prolog definition of a problem by name a_problem
 #Arguments:
-#  clauses;  list of pairs of (string Lambda Prolog clauses, clause ID
+#  clauses;  list of pairs of (string Lambda Prolog clause, clause ID
 #            name)
 #  proof:  string Lambda Prolog proof
 #Return:  string Lambda Prolog problem name declaration
@@ -153,7 +162,7 @@ def build_problem_name_declaration(clauses, proof):
 #  dimacs_filename:  DIMACS file to read
 #  outsig:  open file into which to write the signature output
 #Return:  pair of (number of clauses or -1 for failure (prints error
-#         message), list of pairs of (string clause, clause ID))
+#         message), list of pairs of (list int lits, clause ID))
 def process_dimacs(dimacs_filename, outsig):
     #check if it exists and open it
     if not os.path.exists(dimacs_filename):
@@ -224,7 +233,7 @@ def parse_dimacs_header(dfile, dimacs_filename, outsig):
 #  dfile:  open DIMACS file for reading
 #  dimacs_filename:  DIMACS filename for prenting error messages
 #Return:  pair of (number of clauses read or -1 for failure,
-#         list of pairs of (string clauses, clause ID))
+#         list of pairs of (list int lits, clause ID))
 def parse_dimacs_clauses(dfile, dimacs_filename):
     line = dfile.readline()
     clause_count = 0
@@ -241,8 +250,7 @@ def parse_dimacs_clauses(dfile, dimacs_filename):
             #put the clause literals into a list
             clause_lits = list(map(int, split_line[:-1]))
             #build clause definition
-            clause = build_clause(clause_lits)
-            clauses += [(clause, create_clause_id(clause_count))]
+            clauses += [(clause_lits, create_clause_id(clause_count))]
         line = dfile.readline()
     return (clause_count, clauses)
 
@@ -256,10 +264,9 @@ def parse_dimacs_clauses(dfile, dimacs_filename):
 #Process the LRAT file, converting its contents to Lambda Prolog
 #Arguments:
 #  lrat_filename:  LRAT file to read
-#  num_original_clauses:  number of clauses in the original problem
 #Return:  pair of (True for success, False for failure (prints error
 #         message), Lambda Prolog proof string)
-def process_lrat(lrat_filename, num_original_clauses):
+def process_lrat(lrat_filename):
     #check if it exists and open it
     if not os.path.exists(lrat_filename):
         print("LRAT file '" + lrat_filename + "' does not exist")
@@ -308,12 +315,160 @@ def process_lrat_line(line):
         #check there were, in fact, two separate zeroes
         if proof_clauses == []:
             print("Added clause", clause_id, "is incomplete")
-            return (False, "")
+            return (False, "", 0)
         #build the proof line
         pline = build_proof_line(clause_lits, proof_clauses)
         return (True, pline, clause_id)
     else:
         return (True, "", 0)
+
+
+
+
+######################################################################
+#                            FRAT PARSING                            #
+######################################################################
+
+#Process the FRAT file, converting its contents to Lambda Prolog
+#Arguments:
+#  frat_filename:  FRAT file to read
+#  original_clauses:  clauses in original problem as list of pairs
+#                     (list int lits, clause ID)
+#Return:  pair of (True for success, False for failure (prints error
+#         message), Lambda Prolog proof string)
+def process_frat(frat_filename, original_clauses):
+    #check if it exists and open it
+    if not os.path.exists(frat_filename):
+        print("FRAT file '" + frat_filename + "' does not exist")
+        return (False, "")
+    ffile = open(frat_filename, "r")
+    #read all the lines and build a list of Lambda Prolog proof_lines
+    proof_lines = []
+    line = ffile.readline()
+    while line:
+        #only handle non-blank, non-comment lines
+        if not line.isspace() and line[0] != "c":
+            result_code, result, cid = process_frat_line(line)
+            #check for failure of line processing
+            if result_code < 0:
+                ffile.close()
+                return (False, "")
+            #add the line to the lines if it is an add line
+            elif result_code == 0:
+                proof_lines += [(result, cid)]
+            #check an original line exists, then proof it
+            elif result_code == 1:
+                i = 0
+                found = False
+                while not found and i < len(original_clauses):
+                    lits, _ = original_clauses[i]
+                    if set(lits) == set(result): #same clause
+                        found = True
+                    i += 1
+                if not found:
+                    print("FRAT file '" + frat_filename + "' " +\
+                          "claims a nonexistent original clause")
+                    return (False, "")
+                #add it to the proof as a new clause with the right ID
+                #can't use existing clause ID because it could have
+                #   been overwritten, so use no proof
+                pline = build_proof_line(result, [])
+                proof_lines += [(pline, cid)]
+            #any other kind of line is ignored
+        line = ffile.readline()
+    #finish
+    proof = build_proof(proof_lines)
+    ffile.close()
+    return (True, proof)
+
+
+#Process a single, non-empty FRAT line to return the proof_line
+#Arguments:
+#  line:  line as read from file
+#Return:  Tuple of (result code, result, clause ID number)
+#         Result codes:
+#           -1:  failure (ignore result)
+#            0:  add line (result is Lambda Prolog translation)
+#            1:  original line (result is lits)
+#            2:  other line (ignore result)
+def process_frat_line(line):
+    split_line = line.split()
+    #skip delete lines
+    if split_line[0] == "a":
+        clause_id = int(split_line[1])
+        rest = split_line[2:]
+        #check we have at least the last zero
+        if rest[-1] != "0":
+            print("Added clause", clause_id, "is incomplete")
+            return (-1, "", 0)
+        first_zero = rest.index("0")
+        clause_lits = list(map(int, rest[:first_zero]))
+        #skip l if there
+        proof_clauses = list(map(int, rest[first_zero + 2:-1]))
+        #build the proof line
+        pline = build_proof_line(clause_lits, proof_clauses)
+        return (0, pline, clause_id)
+    elif split_line[0] == "o":
+        clause_id = int(split_line[1])
+        lits = list(map(int, split_line[2:-1]))
+        return (1, lits, clause_id)
+    else:
+        return (2, "", 0)
+
+
+
+
+######################################################################
+#                            DRAT PARSING                            #
+######################################################################
+
+#Process the DRAT file, converting its contents to Lambda Prolog
+#Arguments:
+#  drat_filename:  DRAT file to read
+#Return:  pair of (True for success, False for failure (prints error
+#         message), Lambda Prolog proof string)
+def process_drat(drat_filename):
+    #check if it exists and open it
+    if not os.path.exists(drat_filename):
+        print("DRAT file '" + drat_filename + "' does not exist")
+        return (False, "")
+    dfile = open(drat_filename, "r")
+    #read all the lines and build a list of Lambda Prolog proof_lines
+    proof_lines = []
+    line = dfile.readline()
+    while line:
+        #only handle non-blank, non-comment lines
+        if not line.isspace() and line[0] != "c":
+            result, pline = process_drat_line(line)
+            #check for failure of line processing
+            if not result:
+                dfile.close()
+                return (False, "")
+            #add the line to the lines if it is not blank
+            if pline != "":
+                proof_lines += [(pline, "u")]
+        line = dfile.readline()        
+    #finish
+    proof = build_proof(proof_lines)
+    dfile.close()
+    return (True, proof)
+
+
+#Process a single, non-empty DRAT line to return the proof_line
+#Arguments:
+#  line:  line as read from file
+#Return:  Tuple of (was successful, Lambda Prolog translation)
+#         Translation is empty string for delete lines
+def process_drat_line(line):
+    split_line = line.split()
+    #skip delete lines
+    if split_line[0] != "d":
+        lits = list(map(int, split_line[0:-1]))
+        #build the proof line
+        pline = build_proof_line(lits, [])
+        return (True, pline)
+    else:
+        return (True, "")
 
 
 
@@ -326,13 +481,13 @@ def main():
     #parse arguments
     argparser = \
         argparse.ArgumentParser(description="Convert a DIMACS file "
-                                "and LRAT file to a Lambda Prolog "
+                                "and proof file to a Lambda Prolog "
                                 "program")
     #positional arguments
     argparser.add_argument("dimacs", metavar="D", type=str,
                            help="DIMACS file to read")
-    argparser.add_argument("lrat", metavar="L", type=str,
-                           help="LRAT file to read")
+    argparser.add_argument("proof", metavar="P", type=str,
+                           help="proof file to read")
     argparser.add_argument("output", metavar="O", type=str,
                            help="base output name to write")
     #options
@@ -340,9 +495,20 @@ def main():
                            action='store_const',
                            const=True, default=False,
                            help="force overwrite existing files")
+    argparser.add_argument('--proof-type', dest='proof_type',
+                           action='store', default="LRAT",
+                           help="type of proof to read---LRAT, " + \
+                                "FRAT, or DRAT")
     #parse arguments
     args = argparser.parse_args()
     force_overwrite = args.force
+
+    #check args
+    proof_type = args.proof_type.lower()
+    if proof_type not in {"lrat", "frat", "drat"}:
+        print("Unknown proof type '" + args.proof_type + "'")
+        argparser.print_help()
+        return -1
 
     #open the output files
     file_base = args.output
@@ -370,20 +536,29 @@ def main():
         outmod.close()
         return num_original
 
-    #parse and process the LRAT file
-    result, lp_proof = process_lrat(args.lrat, num_original)
+    #parse and process the proof file
+    if proof_type == "lrat":
+        result, lp_proof = process_lrat(args.proof)
+    elif proof_type == "frat":
+        result, lp_proof = process_frat(args.proof, clauses)
+    else: #DRAT
+        result, lp_proof = process_drat(args.proof)
+
     if not result:
         outsig.close()
         outmod.close()
         return -1
 
     #build and write the module output
-    proof = build_problem_name_declaration(clauses, lp_proof)
+    string_clauses = []
+    for lits, cid in clauses:
+        string_clauses += [(build_clause(lits), cid)]
+    proof = build_problem_name_declaration(string_clauses, lp_proof)
     outmod.write(proof)
 
     outsig.close()
     outmod.close()
-    return 0 if result else -1
+    return 0
 
 
 if __name__ == "__main__":

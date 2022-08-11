@@ -1,22 +1,25 @@
 #!/bin/bash
 
 print_help(){
-    echo "$0 [options] DIMACS LRAT"
+    echo "$0 [options] DIMACS PROOF"
     echo ""
-    echo "$0:  Check an LRAT proof"
+    echo "$0:  Check an unsatisfiability proof"
     echo ""
     echo "DIMACS             original problem in DIMACS format"
-    echo "LRAT               proof of unsatisfiability in LRAT format"
+    echo "PROOF              proof of unsatisfiability"
     echo ""
     echo "options:"
-    echo "-h, --help         show brief help"
-    echo "--output <base>    output Lambda Prolog code to module base"
-    echo "--no-force         don't force overwriting existing files"
+    echo "-h, --help               show brief help"
+    echo "-p, --proof-type <arg>   read PROOF as this proof type (LRAT, FRAT, DRAT)"
+    echo "--output <base>          output Lambda Prolog code to module base"
+    echo "--no-force               don't force overwriting existing files"
 }
 
 
 force=true
 output_file="output"
+output_type_given=false
+output_type="lrat"
 
 
 #check the arguments
@@ -25,6 +28,30 @@ while test $# -gt 0; do
       -h|--help)
           print_help
           exit 0
+          ;;
+      -p|--proof-type)
+          if $output_type_given; then
+              echo "Can only give proof type once"
+              exit 1
+          fi
+          case "$2" in
+              lrat|LRAT)
+              ;;
+              frat|FRAT)
+              ;;
+              drat|DRAT)
+              ;;
+              *)
+                  echo "Proof type must be LRAT, FRAT, or DRAT"
+                  print_help
+                  exit 1
+                  ;;
+          esac
+          output_type_given=true
+          output_type="$2"
+          #get rid of the flag and argument
+          shift
+          shift
           ;;
       --force)
           force=false
@@ -57,7 +84,7 @@ elif test $# -gt 2; then
 fi
 
 dimacs_file=$1
-lrat_file=$2
+proof_file=$2
 
 
 #make sure the .lpo files are good
@@ -67,9 +94,9 @@ make
 #compile the file into Lambda Prolog
 echo "Compiling to Lambda Prolog"
 if $force; then
-    python3 src/encode.py --force $dimacs_file $lrat_file build/$output_file
+    python3 src/encode.py --proof-type "$output_type" --force $dimacs_file $proof_file build/$output_file
 else
-    python3 src/encode.py $dimacs_file $lrat_file build/$output_file
+    python3 src/encode.py --proof-type "$output_type" $dimacs_file $proof_file build/$output_file
 fi
 res=$?
 if ! [ $res -eq 0 ]; then

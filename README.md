@@ -1,22 +1,32 @@
 
 # Lambda Prolog LRAT Checker
-A verified proof checker for [LRAT
-proofs](https://www.cs.cmu.edu/~mheule/publications/lrat.pdf) written
-in Lambda Prolog.  More accurately, this checks LRUP proofs---clauses
-may only be justified by RUP proof lines, not RAT proof lines.
+A verified proof checker for unsatisfiability proofs for SAT solvers,
+written in Lambda Prolog.  This can handle [LRAT
+proofs](https://www.cs.cmu.edu/~mheule/publications/lrat.pdf), [FRAT
+proofs](https://www.cs.cmu.edu/~mheule/publications/FRAT-TACAS.pdf),
+and [DRAT
+proofs](https://www.cs.cmu.edu/~mheule/publications/drat-trim.pdf).
+This only checks a subset of all of these formats:  clauses may only
+be justified by RUP proof lines, not RAT proof lines.
 
 
 ## Usage
 To check a proof, run
 ```
-./check <DIMACS FILE> <LRAT FILE>
+./check <DIMACS FILE> <PROOF FILE>
 ```
 For example,
 ```
-./check examples/lrat_paper/lrat_paper.cnf examples/lrat_paper/lrat_paper.lrat
+./check examples/lrat_paper/lrat_paper.cnf examples/lrat_paper/proof.lrat
 ```
 If this succeeds, the result will show either `VERIFIED` or
 `UNVERIFIED`.
+
+The LRAT format is the default.  To use another format, use the `-p`
+option and give it the format---`FRAT` or `DRAT`.  For example,
+```
+./check -p DRAT examples/lrat_paper/lrat_paper.cnf examples/lrat_paper/proof.drat
+```
 
 
 ## Proof
