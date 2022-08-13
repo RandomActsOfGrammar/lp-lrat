@@ -55,10 +55,6 @@ Define is_clause : clause -> prop by
   is_clause c*;
   is_clause (or L Rest) := is_lit L /\ is_clause Rest.
 
-Define is_formula : formula -> prop by
-  is_formula f*;
-  is_formula (and C Rest) := is_clause C /\ is_formula Rest.
-
 Define is_proof : proof -> prop by
   is_proof (p* PL);
   is_proof short_p*;
@@ -228,24 +224,6 @@ apply assign_context_member to AC H2. case H3.
    case H1. search.
 
 
-Theorem clause_id_unique : forall AC CID C1 C2,
-  assign_context AC -> member (clause_id CID C1) AC ->
-  member (clause_id CID C2) AC -> C1 = C2.
-induction on 2. intros AC Mem1 Mem2. case Mem1.
-  %1:  mem 1 here
-   case Mem2.
-     %1.1:  mem 2 here
-      search.
-     %1.2:  mem 2 later
-      case AC. apply nabla_not_member to H1.
-  %2:  mem 1 later
-   case Mem2.
-     %2.1:  mem 2 here
-      case AC. apply nabla_not_member to H1.
-     %2.2:  mem 2 later
-      backchain IH with AC = L. case AC. search. search. search.
-
-
 Theorem assign_context_member_or_not : forall AC L,
   assign_context AC -> is_lit L ->
   (member (is_true L) AC \/ (member (is_true L) AC -> false)).
@@ -342,30 +320,6 @@ Define expand_context : olist -> olist -> prop by
          member (clause_id CID C) AC -> member (clause_id CID C) CC).
 
 
-Theorem expand_context_add_clause_id : forall CC AC CID C,
-  expand_context CC AC ->
-  expand_context (clause_id CID C::CC) (clause_id CID C::AC).
-intros EC. case EC.
-  %1:  all members remain
-   assert (forall F, member F (clause_id CID C::CC) ->
-                     member F (clause_id CID C::AC)).
-     intros Mem. case Mem.
-       %1.1:  mem here
-        search.
-       %1.2:  mem later
-        apply H1 to H3. search.
-  %2:  only the same clause ID's
-   assert (forall InID InC,
-              member (clause_id InID InC) (clause_id CID C::AC) ->
-              member (clause_id InID InC) (clause_id CID C::CC)).
-     intros Mem. case Mem.
-       %2.1:  mem here
-        search.
-       %2.2:  mem later
-        apply H2 to H4. search.
-search.
-
-
 Theorem expand_context_monotone : forall CC AC F,
   expand_context CC AC -> {CC |- F} -> {AC |- F}.
 intros EC P. case EC. monotone P with AC. search.
@@ -405,12 +359,6 @@ intros EC. EC': case EC.
 search.
 
 
-Theorem expand_context_not_mem2 : forall C1 C2 F,
-  expand_context C1 C2 -> (member F C2 -> false) -> member F C1 ->
-  false.
-intros EC NotMem Mem. EC': case EC. backchain NotMem. backchain EC'.
-
-
 Theorem expand_context_transitive : forall C1 C2 C3,
   expand_context C1 C2 -> expand_context C2 C3 ->
   expand_context C1 C3.
@@ -432,10 +380,6 @@ search.
  *                              NEGATE                              *
  ********************************************************************/
 
-Theorem negate_exists : forall Ctx L,
-  assign_context Ctx -> is_lit L -> exists NL, {Ctx |- negate L NL}.
-intros GC IsL. case IsL. search. search.
-
 
 Theorem negate_no_context : forall Ctx L NL,
   assign_context Ctx -> {Ctx |- negate L NL} -> {negate L NL}.
@@ -446,15 +390,6 @@ intros GC Neg. case Neg.
    search.
   %3:  context
    apply assign_context_member to GC H2. case H3. case H1. case H1.
-
-
-Theorem negate_unique : forall L NL1 NL2,
-  {negate L NL1} -> {negate L NL2} -> NL1 = NL2.
-intros Neg1 Neg2. case Neg1.
-  %1:  L = var
-   case Neg2. search.
-  %2:  L = neg
-   case Neg2. search.
 
 
 Theorem not_is_true_lit_negate : forall Ctx L NL,
@@ -532,134 +467,10 @@ induction on 3. intros GC Sat Unsat. case Sat.
       case H1.
 
 
-Theorem sat_clause__clause_id_ctx : forall Ctx CID C C',
-  assign_context Ctx -> {Ctx, clause_id CID C |- sat_clause C'} ->
-  {Ctx |- sat_clause C'}.
-induction on 2. intros AC P. case P.
-  %1:  sat here
-   case H1. case H3.
-     %1.1:  backchain clause_id
-      case H2.
-     %1.2:  backchain else
-      apply assign_context_member to AC H4. case H5.
-        %1.2.1:  member is_true
-         case H2. search.
-        %1.2.2:  member clause_id
-         case H2.
-  %2:  sat later
-   apply IH to _ H1. search.
-  %3:  context
-   case H2.
-     %3.1:  member clause_id
-      case H1.
-     %3.2:  member rest
-      apply assign_context_member to AC H3. case H4.
-        %3.2.1:  member is_true
-         case H1.
-        %3.2.2:  member clause_id
-         case H1.
-
-
-Theorem sat__clause_id_ctx : forall Ctx CID C F,
-  assign_context Ctx -> {Ctx, clause_id CID C |- sat F} ->
-  {Ctx |- sat F}.
-induction on 2. intros AC P. case P.
-  %1:  f*
-   search.
-  %2:  and
-   apply sat_clause__clause_id_ctx to AC H1. apply IH to AC H2.
-   search.
-  %3:  context
-   case H2.
-     %3.1:  member first
-      case H1.
-     %3.2:  member later
-      apply assign_context_member to AC H3. case H4.
-        %3.2.1:  member is_true
-         case H1.
-        %3.2.2:  member clause_id
-         case H1.
-
-
 Theorem empty_clause_unsat : forall Ctx,
   assign_context Ctx -> {Ctx |- sat_clause c*} -> false.
 intros CC SatC. case SatC. apply assign_context_member to CC H2.
 case H3. case H1. case H1.
-
-
-
-
-/********************************************************************
- *                          CLAUSE MEMBER                           *
- ********************************************************************/
-
-/*
- * Membership of a literal in a clause
- */
-Define clause_member : lit -> clause -> prop by
-  clause_member L (or L Rest);
-  clause_member L (or X Rest) := clause_member L Rest.
-
-
-Theorem clause_member_ctx_member_sat : forall Ctx L C,
-  member (is_true L) Ctx -> clause_member L C ->
-  {Ctx |- sat_clause C}.
-induction on 2. intros Mem CMem. CMem': case CMem.
-  %1:  clause_member here
-   search.
-  %2:  clase_member later
-   apply IH to Mem CMem'. search.
-
-
-Theorem clause_member_or_not : forall L C,
-  is_lit L -> is_clause C ->
-  clause_member L C \/ (clause_member L C -> false).
-induction on 2. intros IsL IsC. IsC': case IsC.
-  %1:  empty clause
-   right. intros Mem. case Mem.
-  %2:  add clause
-   Eq: apply lit_eq_or_not to IsL IsC'. Eq': case Eq.
-     %2.1:  equal
-      search.
-     %2.2:  not equal
-      Sub: apply IH to IsL IsC'1. Sub': case Sub.
-        %2.2.1:  member rest
-         search.
-        %2.2.2:  not member rest
-         right. intros Mem. Mem': case Mem.
-           %2.2.2.1:  member here
-            backchain Eq'.
-           %2.2.2.2:  member later
-            backchain Sub'.
-
-
-Theorem not_clause_member_sat_irrelevant : forall Ctx C L,
-  assign_context Ctx -> {Ctx, is_true L |- sat_clause C} ->
-  (clause_member L C -> false) -> {Ctx |- sat_clause C}.
-induction on 2. intros AC Sat CMem. Sat': case Sat.
-  %1:  sat here
-   Sat'': case Sat'. Mem: case Sat''1.
-     %1.1:  backchain is_true L
-      case Sat''. CMemL1: assert clause_member L1 (or L1 Rest).
-      apply CMem to CMemL1.
-     %1.2:  backchain in Ctx
-      Mem': apply assign_context_member to AC Mem. case Mem'.
-        %1.2.1:  member is_true
-         case Sat''. search.
-        %1.2.2:  member clause_id
-         case Sat''.
-  %2:  sat later
-   apply IH to AC Sat' _. intros CMem'. backchain CMem. search.
-  %3:  context
-   Mem: case Sat'1.
-     %3.1:  member first is_true
-      case Sat'.
-     %3.2:  member Ctx
-      Mem': apply assign_context_member to AC Mem. case Mem'.
-        %3.2.1:  member is_true
-         case Sat'.
-        %3.2.2:  member clause_id
-         case Sat'.
 
 
 
