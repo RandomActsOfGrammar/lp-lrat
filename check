@@ -94,12 +94,11 @@ make
 #compile the file into Lambda Prolog
 echo "Compiling to Lambda Prolog"
 if $force; then
-    python3 src/encode.py --proof-type "$output_type" --force $dimacs_file $proof_file build/$output_file
+    python3 src/encode.py --proof-type "$output_type" --force $dimacs_file $proof_file build/$output_file; res=$?
 else
-    python3 src/encode.py --proof-type "$output_type" $dimacs_file $proof_file build/$output_file
+    python3 src/encode.py --proof-type "$output_type" $dimacs_file $proof_file build/$output_file; res=$?
 fi
-res=$?
-if ! [ $res -eq 0 ]; then
+if [ ! $res -eq 0 ]; then
     echo "Compilation to Lambda Prolog exited with return code $res"
     exit 2
 fi
@@ -109,8 +108,7 @@ echo
 #compile and link the Lambda Prolog program
 cd build
 echo "Compiling Lambda Prolog output"
-TJPATH=../src tjcc $output_file -o $output_file.lpo
-res=$?
+TJPATH=../src tjcc $output_file -o $output_file.lpo; res=$?
 if ! [ $res -eq 0 ]; then
     echo "Compiling Lambda Prolog program exited with return code $res"
     exit 3
@@ -118,8 +116,7 @@ fi
 echo
 
 echo "Linking Lambda Prolog output"
-tjlink $output_file
-res=$?
+tjlink $output_file; res=$?
 if ! [ $res -eq 0 ]; then
     echo "Linking Lambda Prolog program exited with return code $res"
     exit 4
@@ -129,15 +126,13 @@ echo
 
 #run it and try it to get a result
 lpcmd="problem_name a_problem P, check_problem P."
-lpresult=$(echo $lpcmd | tjsim $output_file)
-res=$?
+lpresult=$(echo $lpcmd | tjsim $output_file); res=$?
 if ! [ $res -eq 0 ]; then
     echo "Running Lambda prolog program exited with return code $res"
     exit 5
 fi
 
-echo $lpresult | grep -q "no (more) solutions"
-res=$?
+echo $lpresult | grep -q "no (more) solutions"; res=$?
 if [ $res -eq 0 ]; then
     echo "UNVERIFED"
 else
