@@ -154,6 +154,21 @@ def build_proof(proof_lines):
     return proof
 
 
+#Build a Lambda Prolog problem term
+#Arguments:
+#  clauses;  list of pairs of (string Lambda Prolog clause, clause ID
+#            name)
+#  proof:  string Lambda Prolog proof
+#Return:  string Lambda Prolog problem
+def build_problem(clauses, proof):
+    #build the problem
+    problem = "end_problem (" + proof + ")"
+    for c, cid in clauses[::-1]: #go through backward
+        problem = "add_clause " + c + " " + \
+            build_abstraction(cid, problem)
+    return problem
+
+
 #Build a Lambda Prolog definition of a problem by name a_problem
 #Arguments:
 #  clauses;  list of pairs of (string Lambda Prolog clause, clause ID
@@ -162,10 +177,7 @@ def build_proof(proof_lines):
 #Return:  string Lambda Prolog problem name declaration
 def build_problem_name_declaration(clauses, proof):
     #build the problem
-    problem = "end_problem (" + proof + ")"
-    for c, cid in clauses[::-1]: #go through backward
-        problem = "add_clause " + c + " " + \
-            build_abstraction(cid, problem)
+    problem = build_problem(clauses, proof)
     #declare the problem name
     return "problem_name a_problem (" + problem + ").\n"
 
@@ -527,12 +539,12 @@ def main():
     module_base = os.path.basename(args.output)
     write_sig_header(module_base, outsig)
     write_mod_header(module_base, outmod)
+    outmod.close()
 
     #parse and process the DIMACS file
     num_original, clauses = process_dimacs(args.dimacs, outsig)
     if num_original < 0:
         outsig.close()
-        outmod.close()
         return num_original
 
     #parse and process the proof file
@@ -546,18 +558,17 @@ def main():
     except Exception as e:
         print(e)
         outsig.close()
-        outmod.close()
         return -1
+
+    outsig.close()
 
     #build and write the module output
     string_clauses = []
     for lits, cid in clauses:
         string_clauses += [(build_clause(lits), cid)]
-    proof = build_problem_name_declaration(string_clauses, lp_proof)
-    outmod.write(proof)
+    problem = build_problem(string_clauses, lp_proof)
+    print(problem)
 
-    outsig.close()
-    outmod.close()
     return 0
 
 
