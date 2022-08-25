@@ -94,13 +94,11 @@ make
 #compile the file into Lambda Prolog
 echo "Compiling to Lambda Prolog"
 if $force; then
-    lp_problem=$(python3 src/encode.py --proof-type "$output_type" \
-                         --force $dimacs_file $proof_file \
-                         build/$output_file); res=$?
+    python3 src/encode.py --proof-type "$output_type" --force \
+            $dimacs_file $proof_file build/$output_file; res=$?
 else
-    lp_problem=$(python3 src/encode.py --proof-type "$output_type" \
-                         $dimacs_file $proof_file build/$output_file); \
-        res=$?
+    python3 src/encode.py --proof-type "$output_type" $dimacs_file \
+            $proof_file build/$output_file; res=$?
 fi
 if [ ! $res -eq 0 ]; then
     echo "Compilation to Lambda Prolog exited with return code $res"
@@ -129,9 +127,7 @@ echo
 
 
 #run it and try it to get a result
-lpcmd="check_problem ($lp_problem)."
-echo $lpcmd
-lpresult=$(echo $lpcmd | tjsim $output_file); res=$?
+lpresult=$(cat "$output_file.problem" | tjsim $output_file); res=$?
 if ! [ $res -eq 0 ]; then
     echo "Running Lambda prolog program exited with return code $res"
     exit 5

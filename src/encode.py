@@ -525,7 +525,8 @@ def main():
     file_base = args.output
     outsig_name = file_base + ".sig"
     outmod_name = file_base + ".mod"
-    for filename in [outsig_name, outmod_name]:
+    outprob_name = file_base + ".problem"
+    for filename in [outsig_name, outmod_name, outprob_name]:
         if (not force_overwrite) and os.path.exists(filename):
             open_anyway = input("Output file '" + filename + \
                                 "' exists; overwrite (Y/n)? ")
@@ -534,6 +535,7 @@ def main():
                 return 0 #not a failure, just a change of mind
     outsig = open(outsig_name, "w")
     outmod = open(outmod_name, "w")
+    outprob = open(outprob_name, "w")
 
     #write the header information
     module_base = os.path.basename(args.output)
@@ -545,9 +547,11 @@ def main():
     num_original, clauses = process_dimacs(args.dimacs, outsig)
     if num_original < 0:
         outsig.close()
+        outprob.close()
         return num_original
 
     #parse and process the proof file
+    caught = False
     try:
         if proof_type == "lrat":
             lp_proof = process_lrat(args.proof)
@@ -555,9 +559,19 @@ def main():
             lp_proof = process_frat(args.proof, clauses)
         else: #DRAT
             lp_proof = process_drat(args.proof)
-    except Exception as e:
+    except ParseException as e:
         print(e)
+        caught = True
+    except NoFileError as e:
+        print(e)
+        caught = True
+    except SemanticError as e:
+        print(e)
+        caught = True
+
+    if caught:
         outsig.close()
+        outprob.close()
         return -1
 
     outsig.close()
@@ -567,8 +581,8 @@ def main():
     for lits, cid in clauses:
         string_clauses += [(build_clause(lits), cid)]
     problem = build_problem(string_clauses, lp_proof)
-    print(problem)
-
+    outprob.write("check_problem (" + problem + ").\n")
+    outprob.close()
     return 0
 
 
