@@ -150,7 +150,7 @@ def build_proof(proof_lines):
     rest = proof_lines[:-1]
     for pline, cid in rest[::-1]:
         var_cid = create_clause_id(cid)
-        proof = pline + " (" + build_abstraction(var_cid, proof) + ")"
+        proof = pline + " " + build_abstraction(var_cid, proof)
     return proof
 
 
@@ -164,7 +164,7 @@ def build_problem_name_declaration(clauses, proof):
     #build the problem
     problem = "end_problem (" + proof + ")"
     for c, cid in clauses[::-1]: #go through backward
-        problem = "add_clause (" + c + ") " + \
+        problem = "add_clause " + c + " " + \
             build_abstraction(cid, problem)
     #declare the problem name
     return "problem_name a_problem (" + problem + ").\n"
