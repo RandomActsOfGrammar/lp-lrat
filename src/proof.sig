@@ -32,13 +32,3 @@ type add_clause    clause -> (clause_id -> problem) -> problem.
  */
 type check_problem   problem -> o.
 
-
-/*
- * Give problems a name so they are easier to read
- */
-kind problem_name   type.
-
-type a_problem   problem_name.
-
-type problem_name   problem_name -> problem -> o.
-
