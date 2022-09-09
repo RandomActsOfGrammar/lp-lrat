@@ -9,12 +9,8 @@ Specification "proof".
  * We can't prove anything about not_assigned because it uses cut and
  * fail, so we assume it works.
  */
-Theorem not_assigned_true_lit : forall Ctx L,
+Theorem not_assigned_lit : forall Ctx L,
   {Ctx |- not_assigned L} -> member (is_true L) Ctx -> false.
-skip.
-Theorem not_assigned_false_lit : forall Ctx L NL,
-  {Ctx |- not_assigned L} -> {negate L NL} ->
-  member (is_true NL) Ctx -> false.
 skip.
 /*
  * Note that this also means we can't use the monotonicity property of
@@ -207,19 +203,20 @@ Theorem assign_context_add_is_true_not_mem : forall AC L NL,
 intros AC Neg NotMem. case Neg. search. search.
 
 
-Theorem assign_context_add_is_true : forall AC L,
+Theorem assign_context_add_is_true : forall AC L NL,
   assign_context AC -> is_lit L -> {AC |- not_assigned L} ->
+  {negate L NL} -> {AC |- not_assigned NL} ->
   assign_context (is_true L::AC).
-intros AC IsL NA. case IsL.
+intros AC IsL NA Neg NANL. case IsL.
   %1:  var V
    assert member (is_true (neg V)) AC -> false.
-     intros Mem. Neg: assert {negate (var V) (neg V)}.
-     apply not_assigned_false_lit to NA Neg Mem.
+     intros Mem. case Neg.
+     apply not_assigned_lit to NANL Mem.
    search.
   %2:  neg V
    assert member (is_true (var V)) AC -> false.
-     intros Mem. Neg: assert {negate (neg V) (var V)}.
-     apply not_assigned_false_lit to NA Neg Mem.
+     intros Mem. case Neg.
+     apply not_assigned_lit to NANL Mem.
    search.
 
 
@@ -509,6 +506,11 @@ Theorem negate_is_lit : forall L NL, {negate L NL} -> is_lit L.
 intros Neg. case Neg. search. search.
 
 
+Theorem negate_exists : forall L,
+  is_lit L -> exists NL, {negate L NL}.
+intros IsL. case IsL. search. search.
+
+
 Theorem negate_symmetric : forall L NL, {negate L NL} -> {negate NL L}.
 intros. case H1. search. search.
 
@@ -612,7 +614,7 @@ induction on 2. intros AC UC ACSat EC Sat. UC: case UC.
         %1.1.2:  member clause_id
          case H1.
      %1.2:  sat rest
-      UCSat: apply expand_context_unsat_clause to AC EC UC1.
+      UCSat: apply expand_context_unsat_clause to AC EC UC3.
       apply not_sat_unsat_clause to ACSat Sat UCSat.
      %1.3:  context
       apply assign_context_member to ACSat Sat1. case H1.
@@ -646,6 +648,22 @@ Theorem unit_clause_not_assigned : forall AC C L,
   assign_context AC -> {AC |- unit_clause C L} ->
   {AC |- not_assigned L}.
 induction on 2. intros AC UC. case UC.
+  %1:  not assigned first
+   search.
+  %2:  not assigned later
+   backchain IH.
+  %3:  context
+   apply assign_context_member to AC H2. case H3.
+     %3.1:  member is_lit
+      case H1.
+     %3.2:  member clause_id
+      case H1.
+
+
+Theorem unit_clause_not_assigned_negate : forall AC C L NL,
+  assign_context AC -> {AC |- unit_clause C L} -> {negate L NL} ->
+  {AC |- not_assigned NL}.
+induction on 2. intros AC UC Neg. case UC.
   %1:  not assigned first
    search.
   %2:  not assigned later
@@ -703,7 +721,9 @@ induction on 2. intros AC RupHelp EC ACSat Sat. case RupHelp.
    NAL: apply unit_clause_not_assigned to AC H2.
    IsC:  apply clause_id_is_clause to AC H1.
    IsL:  apply unit_clause_is_lit to AC IsC H2.
-   ACAdd: apply assign_context_add_is_true to AC IsL NAL.
+   Neg: apply negate_exists to IsL.
+   NANL: apply unit_clause_not_assigned_negate to AC H2 Neg.
+   ACAdd: apply assign_context_add_is_true to AC IsL NAL Neg NANL.
    apply IH to ACAdd H3 AddEC ACSat Sat.
   %3:  context
    apply assign_context_member to AC H2. case H3.
@@ -803,7 +823,9 @@ induction on 2. intros AC RupHelp EC ACSat Sat. case RupHelp.
    NAL: apply unit_clause_not_assigned to AC H2.
    IsC:  apply clause_id_is_clause to AC H1.
    IsL:  apply unit_clause_is_lit to AC IsC H2.
-   ACAdd: apply assign_context_add_is_true to AC IsL NAL.
+   Neg: apply negate_exists to IsL.
+   NANL: apply unit_clause_not_assigned_negate to AC H2 Neg.
+   ACAdd: apply assign_context_add_is_true to AC IsL NAL Neg NANL.
    apply IH to ACAdd H3 AddEC ACSat Sat.
   %3:  context
    apply assign_context_member to AC H2. case H3.

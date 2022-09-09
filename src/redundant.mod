@@ -31,7 +31,8 @@ drup_help X :-
 
 
 /*first literal is the unit*/
-unit_clause (or L Rest) L :- not_assigned L, unsat_clause Rest.
+unit_clause (or L Rest) L :-
+   not_assigned L, negate L NL, not_assigned NL, unsat_clause Rest.
 /*first literal is falsified*/
 unit_clause (or L Rest) Unit :-
    negate L NL, is_true NL, unit_clause Rest Unit.
@@ -39,10 +40,9 @@ unit_clause (or L Rest) Unit :-
 
 /*
  * This relies on the order of clauses by using cut and fail.
- * If L is assigned true or its negation is assigned true, this will
- * fail.  It only succeeds if it is unassigned.
+ * If L is assigned true, this will fail.  It only succeeds if it is
+ * unassigned.
  */
 not_assigned L :- is_true L, !, fail.
-not_assigned L :- negate L NL, is_true NL, !, fail.
 not_assigned L.
 
